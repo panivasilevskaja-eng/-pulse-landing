@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulse — узнайте о сбое API раньше клиентов</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0B0E14;
+    --surface: #10141C;
+    --surface-2: #151A24;
+    --border: #232938;
+    --text: #E7E9EE;
+    --text-muted: #8B93A7;
+    --text-dim: #565F73;
+    --signal: #2DD4BF;
+    --signal-dim: #1A5A52;
+    --alert: #F5A623;
+    --danger: #F0554B;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --serif: 'Space Grotesk', sans-serif;
+    --sans: 'Inter', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  *{ box-sizing: border-box; }
+  html{ scroll-behavior: smooth; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  img, svg{ max-width:100%; display:block; }
+  a{ color: inherit; }
+  .wrap{ max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+  @media (max-width: 640px){ .wrap{ padding: 0 20px; } }
+
+  ::selection{ background: var(--signal); color: #05130F; }
+
+  :focus-visible{
+    outline: 2px solid var(--signal);
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  }
+
+  /* ---------- Nav ---------- */
+  header.nav{
+    position: sticky; top:0; z-index: 50;
+    background: rgba(11,14,20,0.85);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 18px 0;
+  }
+  .logo{
+    display:flex; align-items:center; gap:10px;
+    font-family: var(--serif); font-weight:600; font-size:19px;
+    text-decoration:none; letter-spacing: -0.01em;
+  }
+  .logo-dot{
+    width:9px; height:9px; border-radius:50%;
+    background: var(--signal);
+    box-shadow: 0 0 0 4px rgba(45,212,191,0.15);
+    flex-shrink:0;
+  }
+  .nav-links{
+    display:flex; align-items:center; gap:36px;
+    list-style:none; margin:0; padding:0;
+  }
+  .nav-links a{
+    text-decoration:none; color: var(--text-muted);
+    font-size: 14.5px; font-weight:500;
+    transition: color .15s ease;
+  }
+  .nav-links a:hover{ color: var(--text); }
+  .nav-cta{
+    display:flex; align-items:center; gap:20px;
+  }
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 14.5px; font-weight: 600;
+    text-decoration:none;
+    border: 1px solid transparent;
+    cursor:pointer;
+    transition: transform .12s ease, background .15s ease, border-color .15s ease;
+    font-family: var(--sans);
+  }
+  .btn:active{ transform: scale(0.98); }
+  .btn-primary{
+    background: var(--signal);
+    color: #05130F;
+  }
+  .btn-primary:hover{ background: #4ee0cb; }
+  .btn-ghost{
+    color: var(--text-muted);
+    border-color: var(--border);
+    background: transparent;
+  }
+  .btn-ghost:hover{ color: var(--text); border-color: #3a4258; }
+  .link-quiet{
+    color: var(--text-muted); text-decoration:none; font-size:14.5px; font-weight:500;
+  }
+  .link-quiet:hover{ color: var(--text); }
+  .mobile-hide{ display:inline-flex; }
+  @media (max-width: 780px){
+    .nav-links{ display:none; }
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding: 96px 0 64px;
+    display:grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 56px;
+    align-items:center;
+  }
+  @media (max-width: 900px){
+    .hero{ grid-template-columns: 1fr; padding: 56px 0 40px; gap:40px; }
+  }
+  .hero h1{
+    font-family: var(--serif);
+    font-size: clamp(2.3rem, 4.2vw, 3.4rem);
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    margin: 0 0 22px;
+    max-width: 15ch;
+  }
+  .hero p.lead{
+    font-size: 17.5px;
+    color: var(--text-muted);
+    max-width: 46ch;
+    margin: 0 0 34px;
+  }
+  .hero-actions{ display:flex; align-items:center; gap: 22px; flex-wrap:wrap; }
+  .hero-actions .btn-primary{ padding: 13px 26px; font-size:15px; }
+
+  .hero-meta{
+    margin-top: 30px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text-dim);
+  }
+
+  /* monitor panel */
+  .monitor{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow:hidden;
+  }
+  .monitor-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text-dim);
+  }
+  .monitor-head .dots{ display:flex; gap:6px; }
+  .monitor-head .dots span{ width:8px; height:8px; border-radius:50%; background:#2A3142; }
+  .monitor-status{
+    display:flex; align-items:center; gap:8px;
+    color: var(--signal);
+  }
+  .monitor-status .p{
+    width:7px; height:7px; border-radius:50%; background: var(--signal);
+    box-shadow: 0 0 0 3px rgba(45,212,191,0.18);
+  }
+  .monitor-body{ padding: 22px 18px 18px; }
+  .wave-line{
+    width:100%; height: auto;
+    stroke: var(--signal);
+    stroke-width: 2;
+    fill: none;
+  }
+  .wave-spike{ stroke: var(--danger); }
+  .wave-dash{
+    stroke-dasharray: 900;
+    stroke-dashoffset: 900;
+    animation: draw 3.4s ease-in-out infinite;
+  }
+  @keyframes draw{
+    0%{ stroke-dashoffset: 900; }
+    55%{ stroke-dashoffset: 0; }
+    100%{ stroke-dashoffset: -900; }
+  }
+  .monitor-annot{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .monitor-annot .warn{ color: var(--alert); }
+  .monitor-annot .ok{ color: var(--text-dim); }
+
+  /* ---------- Stats ---------- */
+  .stats{
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 34px 0;
+  }
+  .stats-inner{
+    display:grid; grid-template-columns: repeat(3,1fr);
+    gap: 24px;
+  }
+  @media (max-width: 700px){ .stats-inner{ grid-template-columns:1fr; gap:22px; } }
+  .stat-num{
+    font-family: var(--serif); font-size: 2rem; font-weight:600;
+    color: var(--text);
+  }
+  .stat-label{ color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+
+  /* ---------- Section shared ---------- */
+  section{ padding: 88px 0; }
+  @media (max-width: 700px){ section{ padding: 56px 0; } }
+  .section-head{ max-width: 620px; margin-bottom: 52px; }
+  .section-head h2{
+    font-family: var(--serif);
+    font-size: clamp(1.7rem, 2.8vw, 2.3rem);
+    letter-spacing: -0.015em;
+    font-weight: 600;
+    margin: 0 0 14px;
+  }
+  .section-head p{ color: var(--text-muted); font-size: 16px; margin:0; max-width: 54ch; }
+
+  /* ---------- Problem ---------- */
+  .problem-grid{
+    display:grid; grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow:hidden;
+  }
+  @media (max-width: 800px){ .problem-grid{ grid-template-columns: 1fr; } }
+  .problem-item{
+    background: var(--surface);
+    padding: 28px 26px;
+  }
+  .problem-item h3{
+    font-size: 16.5px; font-weight:600; margin: 0 0 10px;
+    font-family: var(--sans);
+  }
+  .problem-item p{ color: var(--text-muted); font-size: 14.5px; margin:0; }
+  .problem-item .tag{
+    font-family: var(--mono); font-size: 11.5px; color: var(--danger);
+    display:block; margin-bottom: 12px;
+  }
+
+  /* ---------- Features (asymmetric) ---------- */
+  .feature-grid{
+    display:grid;
+    grid-template-columns: 1.4fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 20px;
+  }
+  @media (max-width: 860px){ .feature-grid{ grid-template-columns: 1fr; } }
+  .feature-card{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 32px;
+  }
+  .feature-card.large{ grid-row: span 2; }
+  .feature-card h3{
+    font-family: var(--serif);
+    font-size: 20px; font-weight:600; margin: 0 0 12px;
+    letter-spacing: -0.01em;
+  }
+  .feature-card p{ color: var(--text-muted); font-size: 15px; margin:0 0 20px; }
+  .feature-visual{
+    margin-top: 8px;
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+  }
+  .route-row{
+    display:flex; align-items:center; gap:10px;
+    font-family: var(--mono); font-size: 12.5px; color: var(--text-muted);
+    padding: 9px 0;
+    border-bottom: 1px dashed var(--border);
+  }
+  .route-row:last-child{ border-bottom:none; }
+  .route-row .arrow{ color: var(--text-dim); }
+  .route-row .dest{ color: var(--signal); }
+
+  .mini-feature{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 26px 28px;
+  }
+  .mini-feature h3{ font-size: 16.5px; font-weight:600; margin:0 0 8px; font-family: var(--sans); }
+  .mini-feature p{ color: var(--text-muted); font-size: 14.5px; margin:0; }
+
+  .status-preview{
+    display:flex; align-items:center; gap: 14px;
+    margin-top: 18px;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: var(--mono); font-size: 12px;
+  }
+  .status-preview .p{ width:7px; height:7px; border-radius:50%; background: var(--signal); flex-shrink:0; }
+
+  /* ---------- How it works ---------- */
+  .steps{
+    display:grid; grid-template-columns: repeat(3, 1fr);
+    gap: 40px;
+  }
+  @media (max-width: 800px){ .steps{ grid-template-columns:1fr; gap: 32px; } }
+  .step{ position:relative; padding-left: 0; }
+  .step-num{
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--signal);
+    border: 1px solid var(--signal-dim);
+    width: 30px; height:30px;
+    border-radius: 50%;
+    display:flex; align-items:center; justify-content:center;
+    margin-bottom: 18px;
+  }
+  .step h3{ font-size: 17px; font-weight:600; margin: 0 0 8px; font-family: var(--sans); }
+  .step p{ color: var(--text-muted); font-size: 14.5px; margin:0; }
+
+  /* ---------- Testimonial ---------- */
+  .testimonial{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 48px;
+    display:grid;
+    grid-template-columns: auto 1fr;
+    gap: 32px;
+    align-items:start;
+  }
+  @media (max-width: 700px){ .testimonial{ grid-template-columns:1fr; padding: 32px; gap:20px; } }
+  .testimonial .mark{
+    font-family: var(--serif); font-size: 48px; color: var(--signal-dim); line-height:1;
+  }
+  .testimonial blockquote{
+    margin:0 0 20px; font-family: var(--serif);
+    font-size: 22px; line-height:1.4; font-weight:500; letter-spacing:-0.01em;
+  }
+  .testimonial cite{
+    font-style:normal; color: var(--text-muted); font-size: 14px;
+  }
+  .testimonial cite b{ color: var(--text); font-weight:600; }
+
+  /* ---------- Pricing ---------- */
+  .pricing-grid{
+    display:grid; grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  @media (max-width: 860px){ .pricing-grid{ grid-template-columns:1fr; } }
+  .price-card{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 32px 28px;
+    display:flex; flex-direction:column;
+  }
+  .price-card.featured{
+    border-color: var(--signal-dim);
+    background: linear-gradient(180deg, rgba(45,212,191,0.06), var(--surface) 40%);
+  }
+  .price-card h3{ font-size: 15px; font-weight:600; margin:0 0 4px; color: var(--text-muted); }
+  .price-amount{
+    font-family: var(--serif); font-size: 2.2rem; font-weight:600; margin: 10px 0 4px;
+  }
+  .price-amount span{ font-size: 15px; color: var(--text-muted); font-weight:400; font-family: var(--sans); }
+  .price-desc{ color: var(--text-muted); font-size: 14px; margin: 0 0 22px; }
+  .price-list{ list-style:none; padding:0; margin: 0 0 26px; flex-grow:1; }
+  .price-list li{
+    font-size: 14px; color: var(--text-muted);
+    padding: 8px 0; border-top: 1px solid var(--border);
+  }
+  .price-list li:first-child{ border-top:none; }
+  .price-list li b{ color: var(--text); font-weight:600; }
+
+  /* ---------- Final CTA ---------- */
+  .cta-section{
+    text-align:left;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 56px;
+    display:grid;
+    grid-template-columns: 1fr auto;
+    align-items:center;
+    gap: 30px;
+  }
+  @media (max-width: 700px){ .cta-section{ grid-template-columns:1fr; text-align:left; padding: 36px 28px; } }
+  .cta-section h2{
+    font-family: var(--serif); font-size: 1.9rem; margin:0 0 10px; letter-spacing:-0.015em;
+  }
+  .cta-section p{ color: var(--text-muted); margin:0; font-size:15.5px; }
+
+  /* ---------- Footer ---------- */
+  footer{
+    border-top: 1px solid var(--border);
+    padding: 40px 0;
+  }
+  .footer-inner{
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap: 16px;
+  }
+  .footer-inner .logo{ font-size:16px; }
+  .footer-links{ display:flex; gap: 26px; list-style:none; padding:0; margin:0; }
+  .footer-links a{ color: var(--text-dim); text-decoration:none; font-size: 13.5px; }
+  .footer-links a:hover{ color: var(--text-muted); }
+  .footer-copy{ color: var(--text-dim); font-size: 13px; font-family: var(--mono); }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="#" class="logo"><span class="logo-dot"></span>pulse</a>
+    <ul class="nav-links">
+      <li><a href="#product">Продукт</a></li>
+      <li><a href="#how">Как это работает</a></li>
+      <li><a href="#pricing">Тарифы</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a href="#" class="link-quiet mobile-hide">Войти</a>
+      <a href="#" class="btn btn-primary">Начать бесплатно</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap">
+    <div>
+      <h1>Узнайте о сбое API раньше, чем об этом напишет клиент</h1>
+      <p class="lead">Pulse проверяет ваши эндпоинты каждые 30 секунд и мгновенно сообщает команде, когда что-то идёт не так — в Slack, PagerDuty или на почту.</p>
+      <div class="hero-actions">
+        <a href="#" class="btn btn-primary">Начать бесплатно</a>
+        <a href="#" class="link-quiet">Посмотреть демо</a>
+      </div>
+      <div class="hero-meta">без карты · настройка за 4 минуты</div>
+    </div>
+
+    <div class="monitor">
+      <div class="monitor-head">
+        <span>api.checkout.internal — GET /v2/health</span>
+        <div class="dots"><span></span><span></span><span></span></div>
+      </div>
+      <div class="monitor-body">
+        <svg class="wave-line" viewBox="0 0 460 110" preserveAspectRatio="none">
+          <path class="wave-dash" d="M0,70 L40,70 L55,40 L70,85 L90,70 L140,70 L155,20 L165,95 L175,55 L185,70 L260,70 L275,15 L290,100 L305,60 L320,70 L460,70" />
+        </svg>
+        <div class="monitor-annot">
+          <span class="warn">⚠ время ответа 2.1s, порог превышен</span>
+          <span class="ok">алерт в Slack отправлен через 8с</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="stats">
+    <div class="wrap stats-inner">
+      <div>
+        <div class="stat-num">4.2M</div>
+        <div class="stat-label">проверок в день по всем командам</div>
+      </div>
+      <div>
+        <div class="stat-num">&lt;90с</div>
+        <div class="stat-label">среднее время до алерта</div>
+      </div>
+      <div>
+        <div class="stat-num">120+</div>
+        <div class="stat-label">интеграций для оповещений</div>
+      </div>
+    </div>
+  </div>
+
+  <section id="product" class="wrap">
+    <div class="section-head">
+      <h2>Простои случаются молча</h2>
+      <p>Пока никто не смотрит в дашборд, эндпоинт может лежать часами. Клиенты замечают это первыми — и пишут в поддержку раньше, чем инженеры видят проблему.</p>
+    </div>
+    <div class="problem-grid">
+      <div class="problem-item">
+        <span class="tag">без мониторинга</span>
+        <h3>Сбой находит клиент</h3>
+        <p>Первый сигнал о проблеме — тикет в поддержку или гневный твит, а не алерт инженеру.</p>
+      </div>
+      <div class="problem-item">
+        <span class="tag">без мониторинга</span>
+        <h3>Деградация остаётся незаметной</h3>
+        <p>Время ответа растёт неделями, пока не превратится в полноценный инцидент.</p>
+      </div>
+      <div class="problem-item">
+        <span class="tag">без мониторинга</span>
+        <h3>Нет истории для разбора</h3>
+        <p>После инцидента нечем подтвердить, когда именно всё началось и что было причиной.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="section-head">
+      <h2>Что делает Pulse</h2>
+      <p>Достаточно инструментов, чтобы команда из трёх человек следила за продакшеном так же уверенно, как команда из тридцати.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card large">
+        <h3>Умная маршрутизация алертов</h3>
+        <p>Правила решают, кому и как сообщить: разработчику в Slack при первом сбое, дежурному в PagerDuty — если проблема не решена за 5 минут.</p>
+        <div class="feature-visual">
+          <div class="route-row"><span>1-й сбой</span><span class="arrow">→</span><span class="dest">#eng-alerts (Slack)</span></div>
+          <div class="route-row"><span>через 5 мин</span><span class="arrow">→</span><span class="dest">дежурный (PagerDuty)</span></div>
+          <div class="route-row"><span>через 15 мин</span><span class="arrow">→</span><span class="dest">руководитель команды (звонок)</span></div>
+        </div>
+      </div>
+      <div class="feature-card">
+        <h3>Проверки из 14 регионов</h3>
+        <p>Каждый эндпоинт проверяется из нескольких точек мира — вы сразу видите, локальная это проблема сети или реальный сбой сервиса.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Публичная страница статуса</h3>
+        <p>Отдельная страница для клиентов с текущим статусом сервисов и историей инцидентов — без единого письма в поддержку.</p>
+        <div class="status-preview">
+          <span class="p"></span>
+          <span>Все системы работают штатно</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" class="wrap">
+    <div class="section-head">
+      <h2>Как это работает</h2>
+      <p>От регистрации до первого алерта — меньше пяти минут.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Добавьте эндпоинты</h3>
+        <p>Вставьте список URL или подключите OpenAPI-схему — Pulse сам разберёт критичные маршруты.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Настройте пороги</h3>
+        <p>Задайте допустимое время ответа, коды ошибок и частоту проверок для каждого сервиса.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Получайте алерты вовремя</h3>
+        <p>Команда узнаёт о проблеме раньше клиентов — с контекстом, а не просто «что-то сломалось».</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="testimonial">
+      <div class="mark">"</div>
+      <div>
+        <blockquote>Мы перешли на Pulse после инцидента, о котором узнали из тикета в поддержке. Спустя полгода среднее время реакции упало с 40 минут до трёх.</blockquote>
+        <cite><b>Марина Ковалёва</b> — руководитель платформенной команды, Naveo</cite>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing" class="wrap">
+    <div class="section-head">
+      <h2>Тарифы без сюрпризов</h2>
+      <p>Начните бесплатно, платите больше только когда сервисов станет действительно много.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="price-card">
+        <h3>Старт</h3>
+        <div class="price-amount">$0<span> / мес</span></div>
+        <p class="price-desc">Для одного проекта или пет-проекта на выходных.</p>
+        <ul class="price-list">
+          <li><b>5</b> эндпоинтов</li>
+          <li>Проверка раз в 5 минут</li>
+          <li>Алерты на почту</li>
+        </ul>
+        <a href="#" class="btn btn-ghost">Выбрать</a>
+      </div>
+      <div class="price-card featured">
+        <h3>Команда</h3>
+        <div class="price-amount">$29<span> / мес</span></div>
+        <p class="price-desc">Для продуктовой команды с несколькими сервисами.</p>
+        <ul class="price-list">
+          <li><b>50</b> эндпоинтов</li>
+          <li>Проверка раз в 30 секунд</li>
+          <li>Slack, PagerDuty, звонки</li>
+          <li>Публичная страница статуса</li>
+        </ul>
+        <a href="#" class="btn btn-primary">Выбрать</a>
+      </div>
+      <div class="price-card">
+        <h3>Масштаб</h3>
+        <div class="price-amount">По запросу</div>
+        <p class="price-desc">Для инфраструктуры с высокими требованиями к SLA.</p>
+        <ul class="price-list">
+          <li>Без ограничений на эндпоинты</li>
+          <li>Выделенные регионы проверки</li>
+          <li>Персональный SLA и поддержка</li>
+        </ul>
+        <a href="#" class="btn btn-ghost">Связаться с нами</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="cta-section">
+      <div>
+        <h2>Первый инцидент, который вы узнаете сами</h2>
+        <p>Настройте первую проверку за 4 минуты — без карты и без звонка менеджеру.</p>
+      </div>
+      <a href="#" class="btn btn-primary">Начать бесплатно</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footer-inner">
+    <a href="#" class="logo"><span class="logo-dot"></span>pulse</a>
+    <ul class="footer-links">
+      <li><a href="#">Документация</a></li>
+      <li><a href="#">Статус</a></li>
+      <li><a href="#">Контакты</a></li>
+    </ul>
+    <span class="footer-copy">© 2026 Pulse Monitoring Inc.</span>
+  </div>
+</footer>
+
+</body>
+</html>
